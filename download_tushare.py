@@ -1,7 +1,4 @@
-from functools import wraps
-
 import tushare as ts
-from retry import retry
 
 from awesome_func import handle_error, run_multithreading, show_process
 
@@ -9,42 +6,55 @@ from awesome_func import handle_error, run_multithreading, show_process
 class Tushare(object):
 
     def __init__(self, path):
-        self.start = None
-        self.index_list = None
-        self.max_worker = 500
+        self.start = None  # type: str
+        self.code_list = None  # type: list
+        self.max_worker = list  # type: int
+        self.isindex = False  # type: bool
         self._path = path
         self._finished = []
 
     @handle_error()
-    def download_ohlc(self, index):
+    def _download_df(self, code):
         if self.start:
-            df = ts.get_k_data(index, start=self.start)
+            dataframe = ts.get_k_data(
+                code, start=self.start, index=self.isindex)
         else:
-            df = ts.get_k_data(index)
-        df.to_csv(f'{self._path}{index}.csv')
-        self._finished.append(index)
-        show_process(len(self._finished), len(self.index_list))
+            dataframe = ts.get_k_data(code, index=self.isindex)
+        self._save_to_csv(dataframe, code)
+        self._show_process()
+
+    def _check(self):
+        if self.code_list is None:
+            raise Exception("code_list should't be None!")
+        print('OK, start to download!')
+
+    def _show_process(self):
+        self._finished.append(None)
+        show_process(len(self._finished), len(self.code_list))
+
+    def _save_to_csv(self, dataframe, name):
+        dataframe.set_index('date', inplace=True)
+        dataframe.to_csv(f'{self._path}{name}.csv')
 
     def download_csv(self):
         self._check()
-        run_multithreading(self.download_ohlc,
-                           self.index_list, self.max_worker)
+        run_multithreading(self._download_df,
+                           self.code_list, self.max_worker)
 
-    def _check(self):
-        if self.index_list is None:
-            raise Exception("index_list should't be None!")
-        print('OK, start to download!')
-
+    def set_context(self, *args, **kargs):
+        for key, value in kargs.items():
+            setattr(self, key, value)
 
 
 if __name__ == "__main__":
-    # INDEX_LIST = ts.get_hs300s()['code']
-    INDEX_LIST = ['000001', '000002']
-    # run_multithreading(download_ohlc, INDEX_LIST, 500)
+
+    # CODE_LIST = ts.get_hs300s()['code']
+    CODE_LIST = ['000001']
 
     PATH = './what/'
     app = Tushare(PATH)
-    app.index_list = None
-    app.start = None
-    app.max_worker = 500
+    app.set_context(code_list=CODE_LIST,
+                    start=None,
+                    isindex=False,
+                    max_worker=500)
     app.download_csv()
