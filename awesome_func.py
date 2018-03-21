@@ -2,7 +2,9 @@ import multiprocessing
 import multiprocessing.dummy as threading
 import sys
 import time
+from functools import wraps
 
+from retry import retry
 from six import iteritems
 
 
@@ -55,17 +57,36 @@ def dict_to_table(_dict):
     return "%s\n%s%s" % (table_end_str, "".join(data_strs), table_end_str)
 
 
+def run_fuction(*funcs):
+    for func in funcs:
+        begin = time.time()
+        func()
+        end = time.time()
+        print(f'Finished in {end-begin:.2f}s')
+
+
+def handle_error(tries=20, delay=0.01):
+
+    def decorate(func):
+
+        @wraps(func)
+        @retry(tries=tries, delay=delay)
+        def wrapper(*args, **kwargs):
+            try:
+                func(*args, **kwargs)
+            except Exception as error:
+                print(f'Raise an error: {error}')
+                print(f'Start to retry!!!!!')
+                raise Exception
+
+        return wrapper
+
+    return decorate
+
+
 if __name__ == "__main__":
 
     # Functions below are just for test.
-
-    def run_test(*funcs):
-        for func in funcs:
-            t0 = time.time()
-            func()
-            t1 = time.time()
-            print(f'Finished in {t1-t0:.2f}s')
-
     def just_sleep(index, test_list):
         i = len(test_list)
         time.sleep(0.01)
@@ -81,7 +102,7 @@ if __name__ == "__main__":
     def test_multiprocessing():
         print('Start test MultiProcessing')
         finished_list = multiprocessing.Manager().list()
-        run_multiprocessing(just_sleep, [(i, finished_list)
-                                         for i in range(200)], 2)
+        run_multiprocessing(
+            just_sleep, [(i, finished_list) for i in range(200)], 2)
 
-    run_test(test_multithreading, test_multiprocessing)
+    run_fuction(test_multithreading, test_multiprocessing)
